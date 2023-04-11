@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { DataGrid } from '@mui/x-data-grid';
 import { Button, Modal } from '@material-ui/core';
+import Typography from '@material-ui/core/Typography';
+
 import axios from 'axios';
 
 const API_URL = 'https://api-sandbox.revelup.com';
 const API_KEYS = 'api_key=fe0e74c870d84630962b012c3a84f2e1&api_secret=e537e50e496f4a42aa0254bfcd3573f9439ed2a1fedd4420af453ca2cab16df3';
+const API_TOKEN = 'fe0e74c870d84630962b012c3a84f2e1:e537e50e496f4a42aa0254bfcd3573f9439ed2a1fedd4420af453ca2cab16df3';
 
 export default function Products() {
 
@@ -19,8 +22,11 @@ export default function Products() {
     ];
     const [products, setProducts] = useState([]);
     const [selectedRows, setSelectedRows] = useState([]);
+    const [orderId, setOrderId] = useState(0);
+    const [errorMessage, setErrorMessage] = useState('');
     const [openModal, setOpenModal] = useState(false);
-    const [cart, setCart] = useState({ id: 0, total: 0, discount: 0});
+    const [openSuccessModal, setOpenSuccessModal] = useState(false);
+    const [cart, setCart] = useState({ total: 0, discount: 0 });
     const [paginationModel, setPaginationModel] = React.useState({
         pageSize: 10,
         page: 0,
@@ -28,7 +34,7 @@ export default function Products() {
 
     useEffect( () => {
         const getProducts = async () => {
-            await axios.get(`${API_URL}/resources/Product?${API_KEYS}&limit=10`).then(res => {
+            await axios.get(`${API_URL}/resources/Product?${API_KEYS}&limit=20&offset=64510`).then(res => {
                 setProducts(res.data.objects);
             }).catch(err => {
                 console.log(err);
@@ -45,46 +51,88 @@ export default function Products() {
         setSelectedRows(rows);
     }
 
-    const createCart = () => {
+    const calculateCart = () => {
+        setErrorMessage('');
+
+        let data = [];
+        selectedRows.forEach(row => {
+           let obj = {};
+           obj.quantity = 1;
+           obj.product = row.id;
+           obj.price = row.price;
+           data.push(obj);
+        });
+
         const options = {
             // method: 'POST',
-            // url: `${API_URL}/specialresources/cart/calculate?${API_KEYS}`,
+            // url: `${API_URL}/specialresources/cart/submit`,
             headers: {
                 'content-type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+                'Access-Control-Allow-Origin': '*',
+                // 'API-AUTHENTICATION': `${API_TOKEN}`,
             },
             data: {
-                skin: 'weborder',
-                items: selectedRows,
+                establishmentId: 247,
+                items: data
             }
         };
 
-        axios.post(`http://localhost:5000/api/create-order`, options)
-            .then(res => {
-                console.log('response',res);
+        axios.post(`http://localhost:5000/api/calculate-cart`, options) //`${API_URL}/specialresources/cart/calculate`
+        .then(res => {
+            console.log('response',res.data);
+            if(res.data.error) {
+                setErrorMessage(res.data.error.details.message);
+                setOpenSuccessModal(true);
+            } else {
+                res.data.items.forEach(el => {
+                    el.id = el.product;
+                });
+
                 setCart(res.data);
-            })
-            .catch(err => console.error(err));
+                setSelectedRows(res.data.items);
+                setOpenModal(true);
+            }
+        })
+        .catch(err => console.error(err));
     }
 
     const submitCart = () => {
+        setOpenModal(false);
+        setErrorMessage('');
+
+        selectedRows.forEach(row => {
+            row.quantity = row.quantity || 1;
+        });
+
         const options = {
             // method: 'POST',
-            // url: `${API_URL}/specialresources/cart/submit?${API_KEYS}`,
+            // url: `${API_URL}/specialresources/cart/submit`,
             headers: {
                 'content-type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+                'Access-Control-Allow-Origin': '*',
+                'API-AUTHENTICATION': `${API_TOKEN}`,
             },
             data: {
-                skin: 'weborder',
-                items: cart,
+                establishmentId: 247,
+                items: selectedRows,
+                orderInfo: {
+                    asap: true,
+                    call_name: 'Submit cart',
+                    dining_option: 0 //[0, 1, 2, 3, 4, 5, 6, 7]
+                }
             }
         };
 
-        axios.post(`http://localhost:5000/api/create-order`, options)
+        axios.post(`http://localhost:5000/api/submit-cart`, options) //`${API_URL}/specialresources/cart/submit`
             .then(res => {
-                console.log('response',res);
-                setCart(res.data);
+                console.log('response',res.data);
+                if(res.data.error) {
+                    setErrorMessage(res.data.error.details.message);
+                    setOpenSuccessModal(true);
+                } else {
+                    setOrderId(res.data.orderId);
+                    setOpenSuccessModal(true);
+                }
             })
             .catch(err => console.error(err));
     }
@@ -95,20 +143,44 @@ export default function Products() {
                 open={openModal}
                 onClose={() => setOpenModal(false)}
             >
-                <>
-                    <h2>Cart is created!</h2>
-                    <h3>Cart ID -> { cart.id }</h3>
-                    <h3>Total amount to pay -> { cart.total }</h3>
-                    <h3>Discount -> { cart.discount }</h3>
-                    <Button
-                        onClick={ submitCart }
-                        variant='contained'
-                        color='primary'
-                        style={{ margin: '20px 0' }}
-                    >
-                        PAY
-                    </Button>
-                </>
+                <div className='modal'>
+                    <Typography id="modal-title" variant="h4" gutterBottom>
+                        Cart is created!
+                    </Typography>
+                    <Typography id="modal-description" variant="body1" gutterBottom>
+                        <h3>Total amount to pay -> { cart.final_total }</h3>
+                        <h3>Discount -> { cart.discounts || 0 }</h3>
+                        <Button
+                            onClick={ submitCart }
+                            variant='contained'
+                            color='primary'
+                            style={{ margin: '20px 0' }}
+                        >
+                            PAY
+                        </Button>
+                    </Typography>
+                </div>
+            </Modal>
+            <Modal
+                open={openSuccessModal}
+                onClose={() => setOpenSuccessModal(false)}
+            >
+                <div className='modal'>
+                    { errorMessage ?
+                        <Typography id="modal-description" variant="body1" gutterBottom>
+                            <h3>{ errorMessage }</h3>
+                        </Typography>
+                        :
+                        <>
+                            <Typography id="modal-title" variant="h5" gutterBottom>
+                                Assuming Revel supports it!
+                            </Typography>
+                            <Typography id="modal-description" variant="body1" gutterBottom>
+                                <h3>Order ID -> { orderId }</h3>
+                            </Typography>
+                        </>
+                    }
+                </div>
             </Modal>
             <>
                 <h2>Revel Catalog</h2>
@@ -131,7 +203,7 @@ export default function Products() {
                 />
             </>
             <Button
-                onClick={createCart}
+                onClick={calculateCart}
                 variant='contained'
                 color='primary'
                 style={{ margin: '20px 0' }}
