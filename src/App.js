@@ -14,7 +14,7 @@ function App() {
             <div className="App">
                 <main>
                     <Routes className='app-wrapper-content'>
-                        <Route path='/' element={ <Login/> } />
+                        <Route path='/' element={ <Products/> } />
                         <Route path='/login' element={ <Login/> } />
                         <Route path='/products' element={ <Products/> } />
                     </Routes>

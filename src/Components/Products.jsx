@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { DataGrid } from '@mui/x-data-grid';
 import { Button, Modal } from '@material-ui/core';
 import Typography from '@material-ui/core/Typography';
+import Backdrop from '@mui/material/Backdrop';
+import CircularProgress from '@mui/material/CircularProgress';
 
 import axios from 'axios';
 
-const API_URL = 'https://api-sandbox.revelup.com';
-const API_KEYS = 'api_key=fe0e74c870d84630962b012c3a84f2e1&api_secret=e537e50e496f4a42aa0254bfcd3573f9439ed2a1fedd4420af453ca2cab16df3';
+// const API_URL = 'https://api-sandbox.revelup.com';
+// const API_KEYS = 'api_key=fe0e74c870d84630962b012c3a84f2e1&api_secret=e537e50e496f4a42aa0254bfcd3573f9439ed2a1fedd4420af453ca2cab16df3';
 const API_TOKEN = 'fe0e74c870d84630962b012c3a84f2e1:e537e50e496f4a42aa0254bfcd3573f9439ed2a1fedd4420af453ca2cab16df3';
 
 export default function Products() {
@@ -24,7 +26,7 @@ export default function Products() {
     const [selectedRows, setSelectedRows] = useState([]);
     const [orderId, setOrderId] = useState(0);
     const [errorMessage, setErrorMessage] = useState('');
-    const [openModal, setOpenModal] = useState(false);
+    const [loading, setLoading] = useState(false);
     const [openSuccessModal, setOpenSuccessModal] = useState(false);
     const [cart, setCart] = useState({ total: 0, discount: 0 });
     const [paginationModel, setPaginationModel] = React.useState({
@@ -33,9 +35,15 @@ export default function Products() {
     });
 
     useEffect( () => {
+        setLoading(true);
+        const options = {
+            method: 'GET',
+            url: `http://localhost:5000/api/get-products`, // ${API_URL}/resources/Product?${API_KEYS}&limit=20&offset=64510
+        };
         const getProducts = async () => {
-            await axios.get(`${API_URL}/resources/Product?${API_KEYS}&limit=20&offset=64510`).then(res => {
-                setProducts(res.data.objects);
+            await axios(options).then(res => {
+                setProducts(res.data);
+                setLoading(false);
             }).catch(err => {
                 console.log(err);
             })
@@ -52,7 +60,9 @@ export default function Products() {
     }
 
     const calculateCart = () => {
+        setLoading(true);
         setErrorMessage('');
+        setOrderId(0);
 
         let data = [];
         selectedRows.forEach(row => {
@@ -64,13 +74,12 @@ export default function Products() {
         });
 
         const options = {
-            // method: 'POST',
-            // url: `${API_URL}/specialresources/cart/submit`,
             headers: {
                 'content-type': 'application/json',
                 'Access-Control-Allow-Origin': '*',
-                // 'API-AUTHENTICATION': `${API_TOKEN}`,
+                'API-AUTHENTICATION': `${API_TOKEN}`,
             },
+            mode: 'cors',
             data: {
                 establishmentId: 247,
                 items: data
@@ -79,7 +88,6 @@ export default function Products() {
 
         axios.post(`http://localhost:5000/api/calculate-cart`, options) //`${API_URL}/specialresources/cart/calculate`
         .then(res => {
-            console.log('response',res.data);
             if(res.data.error) {
                 setErrorMessage(res.data.error.details.message);
                 setOpenSuccessModal(true);
@@ -90,14 +98,15 @@ export default function Products() {
 
                 setCart(res.data);
                 setSelectedRows(res.data.items);
-                setOpenModal(true);
+                // setOpenModal(true);
             }
+            setLoading(false);
         })
         .catch(err => console.error(err));
     }
 
     const submitCart = () => {
-        setOpenModal(false);
+        setLoading(true);
         setErrorMessage('');
 
         selectedRows.forEach(row => {
@@ -105,12 +114,11 @@ export default function Products() {
         });
 
         const options = {
-            // method: 'POST',
-            // url: `${API_URL}/specialresources/cart/submit`,
+            mode: 'cors',
             headers: {
                 'content-type': 'application/json',
                 'Access-Control-Allow-Origin': '*',
-                'API-AUTHENTICATION': `${API_TOKEN}`,
+                // 'API-AUTHENTICATION': `${API_TOKEN}`,
             },
             data: {
                 establishmentId: 247,
@@ -118,67 +126,49 @@ export default function Products() {
                 orderInfo: {
                     asap: true,
                     call_name: 'Submit cart',
-                    dining_option: 0 //[0, 1, 2, 3, 4, 5, 6, 7]
+                    dining_option: 0
+                },
+                paymentInfo: {
+                    type: 4,
+                    amount: cart.final_total,
+                    tip: 0
                 }
             }
         };
 
         axios.post(`http://localhost:5000/api/submit-cart`, options) //`${API_URL}/specialresources/cart/submit`
             .then(res => {
-                console.log('response',res.data);
                 if(res.data.error) {
                     setErrorMessage(res.data.error.details.message);
                     setOpenSuccessModal(true);
                 } else {
                     setOrderId(res.data.orderId);
-                    setOpenSuccessModal(true);
+                    setErrorMessage('');
                 }
+                setCart({ total: 0, discount: 0 });
+                setLoading(false);
             })
             .catch(err => console.error(err));
     }
 
     return (
         <div style={{ height: 400, width: '100%' }}>
-            <Modal
-                open={openModal}
-                onClose={() => setOpenModal(false)}
+            <Backdrop
+                sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1 }}
+                open={loading}
+                onClick={() => setLoading(false)}
             >
-                <div className='modal'>
-                    <Typography id="modal-title" variant="h4" gutterBottom>
-                        Cart is created!
-                    </Typography>
-                    <Typography id="modal-description" variant="body1" gutterBottom>
-                        <h3>Total amount to pay -> { cart.final_total }</h3>
-                        <h3>Discount -> { cart.discounts || 0 }</h3>
-                        <Button
-                            onClick={ submitCart }
-                            variant='contained'
-                            color='primary'
-                            style={{ margin: '20px 0' }}
-                        >
-                            PAY
-                        </Button>
-                    </Typography>
-                </div>
-            </Modal>
+                <CircularProgress color="inherit" />
+            </Backdrop>
             <Modal
                 open={openSuccessModal}
                 onClose={() => setOpenSuccessModal(false)}
             >
                 <div className='modal'>
-                    { errorMessage ?
+                    { errorMessage &&
                         <Typography id="modal-description" variant="body1" gutterBottom>
                             <h3>{ errorMessage }</h3>
                         </Typography>
-                        :
-                        <>
-                            <Typography id="modal-title" variant="h5" gutterBottom>
-                                Assuming Revel supports it!
-                            </Typography>
-                            <Typography id="modal-description" variant="body1" gutterBottom>
-                                <h3>Order ID -> { orderId }</h3>
-                            </Typography>
-                        </>
                     }
                 </div>
             </Modal>
@@ -210,6 +200,37 @@ export default function Products() {
             >
                 Create Cart
             </Button>
+            { cart.final_total && !orderId && !errorMessage &&
+                <div>
+                    <Typography id="modal-title" variant="h4" gutterBottom>
+                        Cart is created!
+                    </Typography>
+                    <Typography id="modal-description" variant="body1" gutterBottom>
+                        <h3>Total amount to pay -> { cart.final_total }</h3>
+                        <h3>Discount -> { cart.discounts || 0 }</h3>
+                        <Button
+                            onClick={ submitCart }
+                            variant='contained'
+                            color='primary'
+                            style={{ margin: '20px 0' }}
+                        >
+                            PAY
+                        </Button>
+                    </Typography>
+                </div>
+            }
+            { !errorMessage && orderId ?
+                <div>
+                    <Typography id="modal-title" variant="h5" gutterBottom>
+                        Assuming Revel supports it!
+                    </Typography>
+                    <Typography id="modal-description" variant="body1" gutterBottom>
+                        <h3>Order ID -> { orderId }</h3>
+                    </Typography>
+                </div>
+                :
+                <> </>
+            }
         </div>
     );
 }
