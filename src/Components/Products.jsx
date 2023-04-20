@@ -24,6 +24,7 @@ export default function Products() {
     ];
     const [products, setProducts] = useState([]);
     const [selectedRows, setSelectedRows] = useState([]);
+    const [submitProducts, setSubmitProducts] = useState([]);
     const [orderId, setOrderId] = useState(0);
     const [errorMessage, setErrorMessage] = useState('');
     const [loading, setLoading] = useState(false);
@@ -97,8 +98,8 @@ export default function Products() {
                 });
 
                 setCart(res.data);
-                setSelectedRows(res.data.items);
-                // setOpenModal(true);
+                setSubmitProducts(res.data.items);
+                setSubmitProducts(res.data.items);
             }
             setLoading(false);
         })
@@ -109,7 +110,7 @@ export default function Products() {
         setLoading(true);
         setErrorMessage('');
 
-        selectedRows.forEach(row => {
+        submitProducts.forEach(row => {
             row.quantity = row.quantity || 1;
         });
 
@@ -117,12 +118,11 @@ export default function Products() {
             mode: 'cors',
             headers: {
                 'content-type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-                // 'API-AUTHENTICATION': `${API_TOKEN}`,
+                'Access-Control-Allow-Origin': '*'
             },
             data: {
                 establishmentId: 247,
-                items: selectedRows,
+                items: submitProducts,
                 orderInfo: {
                     asap: true,
                     call_name: 'Submit cart',
@@ -194,6 +194,7 @@ export default function Products() {
             </>
             <Button
                 onClick={calculateCart}
+                disabled={ !selectedRows.length }
                 variant='contained'
                 color='primary'
                 style={{ margin: '20px 0' }}
