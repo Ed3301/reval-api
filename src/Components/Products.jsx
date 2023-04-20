@@ -36,17 +36,17 @@ export default function Products() {
 
     useEffect( () => {
         setLoading(true);
-        const options = {
-            method: 'GET',
-            url: `http://localhost:5000/api/get-products`, // ${API_URL}/resources/Product?${API_KEYS}&limit=20&offset=64510
-        };
         const getProducts = async () => {
-            await axios(options).then(res => {
-                setProducts(res.data);
-                setLoading(false);
-            }).catch(err => {
-                console.log(err);
-            })
+            let products = [];
+            for(let i = 68109; i < 68119; i++) {
+                await axios.get(`http://localhost:5000/api/get-product?id=${i}`).then(res => {
+                    products.push(res.data);
+                }).catch(err => {
+                    console.log(err);
+                })
+            }
+            setProducts(products);
+            setLoading(false);
         };
 
         getProducts();
